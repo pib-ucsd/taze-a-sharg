@@ -67,6 +67,7 @@ const int missToneHz = 50;              // tone frequency for target miss
 const int dischargeRate = 1;            // amount of energy decreased per cycle when triggered
 const int rechargeRateOverheat = 1;     // amount of energy increased per cycle on overheat
 const int rechargeRateNormal = 1;       // amount of energy increased per cycle on normal
+const int laserBrightness = 100;        // laser brightness for PWM (0-255)
 
 // button
 const int buttonDebounceMs = 200;       // threshold for button debounce
@@ -344,12 +345,12 @@ void checkEnergy() {
 void readTrigger() {
   int value = digitalRead(triggerPin);
   if (value && !overheat) {
-    digitalWrite(laserPin, HIGH);
+    analogWrite(laserPin, laserBrightness);
     energy = energy - dischargeRate;
     updateEnergyServo();
   }
   else {
-    digitalWrite(laserPin, LOW);
+    analogWrite(laserPin, 0);
     energy = energy + rechargeRate;
     updateEnergyServo();
   }
