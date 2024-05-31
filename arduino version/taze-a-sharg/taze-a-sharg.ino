@@ -48,8 +48,8 @@ const int maxSpeedBonus = 33;           // max speed bonus points (2018/60 since
 const int maxHitSpeedMs = 1000;         // max hit speed for bonus points
 
 // timer
-const int countdownIntervalMs = 500;    // interval for countdown
-const int countdownStart = 3;           // countdown timer start (countdown duration)
+const int countdownIntervalMs = 750;    // interval for countdown
+const int countdownStart = 4;           // countdown timer start (countdown duration) - should be less than 10
 const int timerIntervalMs = 1000;       // interval for timer
 const int timerStart = 60;              // game timer start (game duration)
 
@@ -58,10 +58,16 @@ const int numTargets = 3;               // number of targets
 const int targetThreshold = 800;        // hit threshold for photoresistor (0-1023)
 const int minTargetDurationMs = 2100;   // min target lifetime duration before switching to new target
 const int maxTargetDurationMs = 4200;   // max target lifetime duration before switching to new target
+
+// buzzer
 const int buzzerDurationMs = 200;       // duration of buzzer for target hit/miss
 const int newTargetDurationMs = 50;     // duration between old target off and new target on
-const int hitToneHz = 700;              // tone frequency for target hit
-const int missToneHz = 350;             // tone frequency for target miss
+const int hitToneHz = 1047;             // tone frequency for target hit
+const int missToneHz = 330;             // tone frequency for target miss
+const int startTonesHz[] = {880, 440, 440, 440};                // tones for countdown (index matches countdown number)
+const int endTonesHz[] = {659, 523, 659, 784, 659, 784, 1047};  // tones for game over
+const int numEndTones = 8;              // number of tones in endTonesHz
+const int endDurationMs = 125;          // buzzer duration for end tones
 
 // laser
 const int maxEnergy = 100;              // maximum energy level
@@ -140,6 +146,7 @@ int timer;
 int combo;
 int score;
 float speedBonus;
+int countdown;
 
 // targets
 int currentTarget;
@@ -197,8 +204,8 @@ void setup() {
   // initialize random seed
   randomSeed(analogRead(0));
 
-  // initialize game state
-  gameState = GameState::PRE_GAME;
+  // initialize game state - wait for button press to start
+  gameState = GameState::GAME_OVER;
 }
 
 void loop() {
@@ -209,15 +216,15 @@ void loop() {
       break;
 
     case GameState::COUNTDOWN:
-      updateTimer(countdownIntervalMs);
-      if (timer == 0) {
+      updateCountdown();
+      if (countdown < 0) {
         gameStart();
         gameState = GameState::IN_GAME;
       }
       break;
 
     case GameState::IN_GAME:
-      updateTimer(timerIntervalMs);
+      updateTimer();
       if (timer == 0) {
         gameOver();
         gameState = GameState::GAME_OVER;
@@ -250,7 +257,7 @@ void changeGameState() {
 }
 
 void gameReady() {
-  timer = countdownStart;
+  countdown = countdownStart;
   combo = 0;
   score = 0;
   energy = 100;
@@ -263,6 +270,8 @@ void gameReady() {
 
 void gameStart() {
   timer = timerStart;
+  combo = 0;
+  score = 0;
 }
 
 void gameLoop() {
@@ -301,15 +310,34 @@ void gameLoop() {
 
 void gameOver() {
   analogWrite(laserPin, 0);
-  noTone(buzzerPin);
   setBacklightColor(backlightOff);
   for (int i = 0; i < numTargets; i++) {
     setTargetColor(i, targetOff);
   }
+  for (int i = 0; i < numEndTones; i++) {
+    tone(buzzerPin, endTonesHz[i]);
+    delay(endDurationMs);
+    noTone(buzzerPin);
+    delay(endDurationMs/2);
+  }
 }
 
-void updateTimer(int intervalMs) {
-  if (millis() - timerMillis > intervalMs) {
+void updateCountdown() {
+  if (millis() - timerMillis > countdownIntervalMs) {
+    countdown = countdown - 1;
+    timer = countdown * 11;
+    combo = countdown * 11;
+    score = countdown * 1111;
+    tone(buzzerPin, startTonesHz[countdown]);
+    timerMillis = millis();
+  }
+  if (millis() - timerMillis > countdownIntervalMs/2) {
+    noTone(buzzerPin);
+  }
+}
+
+void updateTimer() {
+  if (millis() - timerMillis > timerIntervalMs) {
     timer = timer - 1;
     timerMillis = millis();
   }
