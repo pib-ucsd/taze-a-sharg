@@ -3,30 +3,30 @@
 // ===== Pins =====
 
 // seven segment display for combo and timer
-const byte timerDataPin = 12;
-const byte timerLatchPin = 11;
-const byte timerClockPin = 9;
-const byte timerDigitPins[] = {4, 3, 6, 7};
+const byte timerDataPin = 31;
+const byte timerLatchPin = 32;
+const byte timerClockPin = 33;
+const byte timerDigitPins[] = {37, 36, 35, 34};
 
 // seven segment display for score
-const byte scoreDataPin = 12;
-const byte scoreLatchPin = 11;
-const byte scoreClockPin = 9;
-const byte scoreDigitPins[] = {4, 3, 6, 7};
+const byte scoreDataPin = 41;
+const byte scoreLatchPin = 42;
+const byte scoreClockPin = 43;
+const byte scoreDigitPins[] = {47, 46, 45, 44};
 
 // targets
-const byte photoresistorPins[] = {A0, A1, A2};
+const byte photoresistorPins[] = {A1, A2, A3};
 const byte rgTargetPins[] = {22, 23, 24, 25, 26, 27};
-const byte buzzerPin = 0;
+const byte buzzerPin = 10;
 
 // laser
-const byte laserPin = 6;
+const byte laserPin = 9;
 const byte triggerPin = 3;
 const byte servoPin = 5;
 Servo servo;
 
 // backlight
-const byte rgbBacklightPins[] = {44, 45, 46};
+const byte rgbBacklightPins[] = {51, 52, 53};
 
 // button
 const byte buttonPin = 2;
@@ -55,19 +55,20 @@ const int timerStart = 60;              // game timer start (game duration)
 
 // targets
 const int numTargets = 3;               // number of targets
-const int targetThreshold = 450;        // hit threshold for photoresistor
+const int targetThreshold = 800;        // hit threshold for photoresistor (0-1023)
 const int minTargetDurationMs = 2100;   // min target lifetime duration before switching to new target
 const int maxTargetDurationMs = 4200;   // max target lifetime duration before switching to new target
 const int buzzerDurationMs = 200;       // duration of buzzer for target hit/miss
 const int newTargetDurationMs = 50;     // duration between old target off and new target on
-const int hitToneHz = 500;              // tone frequency for target hit
-const int missToneHz = 50;              // tone frequency for target miss
+const int hitToneHz = 700;              // tone frequency for target hit
+const int missToneHz = 350;             // tone frequency for target miss
 
 // laser
+const int maxEnergy = 100;              // maximum energy level
 const int dischargeRate = 1;            // amount of energy decreased per cycle when triggered
-const int rechargeRateOverheat = 1;     // amount of energy increased per cycle on overheat
 const int rechargeRateNormal = 1;       // amount of energy increased per cycle on normal
-const int laserBrightness = 100;        // laser brightness for PWM (0-255)
+const int rechargeRateOverheat = 3;     // amount of energy increased per cycle on overheat
+const int laserBrightness = 50;        // laser brightness for PWM (0-255)
 
 // button
 const int buttonDebounceMs = 200;       // threshold for button debounce
@@ -151,6 +152,8 @@ bool overheat;
 
 
 void setup() {
+  Serial.begin(9600);
+
   // seven segment displays
   pinMode(timerDataPin, OUTPUT);
   pinMode(timerLatchPin, OUTPUT);
@@ -230,7 +233,7 @@ void loop() {
 
   updateSegmentDigits();
   displayTimerSegments();
-  //displayScoreSegments();
+  displayScoreSegments();
   delayMicroseconds(1638*((100-displayBrightness)/10)); // largest value 16383
 }
 
@@ -293,10 +296,11 @@ void gameLoop() {
   
   checkEnergy();
   readTrigger();
+  updateEnergyServo();
 }
 
 void gameOver() {
-  digitalWrite(laserPin, LOW);
+  analogWrite(laserPin, 0);
   noTone(buzzerPin);
   setBacklightColor(backlightOff);
   for (int i = 0; i < numTargets; i++) {
@@ -335,7 +339,7 @@ void checkEnergy() {
     rechargeRate = rechargeRateOverheat;
     setBacklightColor(backlightOverheat);
   }
-  else if (energy == 100) {
+  else if (energy == maxEnergy) {
     overheat = false;
     rechargeRate = rechargeRateNormal;
     setBacklightColor(backlightGame);
@@ -343,21 +347,30 @@ void checkEnergy() {
 }
 
 void readTrigger() {
-  int value = digitalRead(triggerPin);
-  if (value && !overheat) {
-    analogWrite(laserPin, laserBrightness);
-    energy = energy - dischargeRate;
-    updateEnergyServo();
+  int value = digitalRead(triggerPin); // on is 0, off is 1
+  if (!value) {
+    if (!overheat) {
+      analogWrite(laserPin, laserBrightness);
+      energy = energy - dischargeRate;
+      if (energy < 0) {
+        energy = 0;
+      }
+    }
+    else {
+      analogWrite(laserPin, 0);
+    }
   }
   else {
     analogWrite(laserPin, 0);
     energy = energy + rechargeRate;
-    updateEnergyServo();
+    if (energy > maxEnergy) {
+      energy = maxEnergy;
+    }
   }
 }
 
 void updateEnergyServo() {
-  int position = map(energy, 0, 100, 0, 180);
+  int position = map(energy, 0, maxEnergy, 180, 0);
   servo.write(position);
 }
 
